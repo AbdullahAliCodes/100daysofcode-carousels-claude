@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Day 41 — Teaching Google Keep to Remember | @uncledullaz</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    /* ── terminal palette ── */
+    --bg:        #000000;
+    --bg2:       #0A0A0A;
+    --fg:        #FFFFFF;
+    --green:     #00FF41;
+    --green-dim: #00B82F;
+    --green-bg:  rgba(0,255,65,0.08);
+    --red:       #FF2E4D;
+    --red-dim:   #B91C1C;
+    --red-bg:    rgba(255,46,77,0.08);
+    --muted:     #6B7280;
+    --muted2:    #9CA3AF;
+    --muted3:    #4B5563;
+    --border:    rgba(255,255,255,0.08);
+    --border-g:  rgba(0,255,65,0.20);
+    --border-r:  rgba(255,46,77,0.20);
+  }
+  html, body { background: #1a1a1a; }
+  body {
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 40px 16px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  h1.top {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500;
+    color: #888; margin-bottom: 16px; letter-spacing: 0.5px;
+  }
+
+  /* ── instructions panel ── */
+  .instructions {
+    max-width: 480px; width: 100%; background: #0e0e0e;
+    border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px 20px;
+    margin-bottom: 20px; font-size: 12px; color: #999; line-height: 1.6;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .instructions strong { color: var(--green); font-weight: 500; }
+  .instructions ol { padding-left: 18px; margin-top: 6px; }
+  .instructions code { color: var(--green); background: var(--green-bg); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  /* ── download-all button ── */
+  .btn-row { display: flex; gap: 10px; max-width: 480px; width: 100%; margin-bottom: 20px; }
+  .dl-btn {
+    flex: 1; background: transparent; color: var(--green);
+    border: 1px solid var(--green-dim); border-radius: 6px;
+    padding: 12px 14px; font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500; cursor: pointer; letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .dl-btn:hover { background: var(--green-bg); }
+  .dl-btn:disabled { opacity: 0.4; cursor: wait; }
+
+  /* ── carousel wrapper ── */
+  .cw { width: 100%; max-width: 480px; }
+  .igf { background: #000; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 30px rgba(0,0,0,0.5); }
+  .igh { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #1a1a1a; background: #0a0a0a; }
+  .iga { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1.5px solid var(--green); background: #111; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--green); font-weight: 700; }
+  .igh-name { font-weight: 600; font-size: 13px; color: #eee; font-family: 'JetBrains Mono', monospace; }
+  .igh-sub { font-size: 10px; color: #555; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── viewport (3:4 aspect) ── */
+  .vp { position: relative; width: 100%; aspect-ratio: 3/4; overflow: hidden; background: #000; }
+  .track { display: flex; height: 100%; transition: transform 0.4s cubic-bezier(0.4,0,0.2,1); cursor: grab; }
+  .track:active { cursor: grabbing; }
+  .slide { min-width: 100%; height: 100%; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); }
+
+  /* ── CRT corner brackets ── */
+  .cr { position: absolute; width: 26px; height: 26px; border: 1.5px solid var(--green); opacity: 0.55; z-index: 5; pointer-events: none; }
+  .cr.tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+  .cr.tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
+  .cr.bl { bottom: 56px; left: 18px; border-right: none; border-top: none; }
+  .cr.br { bottom: 56px; right: 18px; border-left: none; border-top: none; }
+  .cr.red { border-color: var(--red); }
+
+  /* ── slide padding ── */
+  .sp { padding: 30px 32px 60px; display: flex; flex-direction: column; height: 100%; position: relative; z-index: 2; }
+
+  /* ── terminal prompt line ── */
+  .prompt { font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.4; margin-bottom: 14px; }
+  .prompt .path { color: var(--green); }
+  .prompt .dollar { color: var(--green); margin: 0 5px; }
+  .prompt .cmd { color: var(--fg); }
+  .prompt.red .path, .prompt.red .dollar { color: var(--red); }
+
+  /* ── comment line (// style) ── */
+  .cmt { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+  .cmt .slash { color: var(--muted3); }
+
+  /* ── status tag (bracketed) ── */
+  .stag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--green); padding: 3px 0; margin-bottom: 10px; }
+  .stag.red { color: var(--red); }
+  .stag.muted { color: var(--muted2); }
+
+  /* ── big heading ── */
+  .bh {
+    font-family: 'JetBrains Mono', monospace; font-weight: 800;
+    font-size: 34px; line-height: 1.1; letter-spacing: -0.5px;
+    color: var(--fg); margin: 4px 0 14px;
+  }
+  .bh .g { color: var(--green); }
+  .bh .r { color: var(--red); }
+  .bh .m { color: var(--muted2); }
+  .bh.sm { font-size: 28px; }
+  .bh.xl { font-size: 38px; }
+
+  /* ── body text ── */
+  .body { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted2); line-height: 1.55; }
+  .body .g { color: var(--green); }
+  .body .r { color: var(--red); }
+  .body .w { color: var(--fg); }
+
+  /* ── info bar (bottom of slide, above progress) ── */
+  .ibar { margin-top: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green); letter-spacing: 0.5px; display: flex; gap: 14px; flex-wrap: wrap; padding-bottom: 4px; }
+  .ibar .k { color: var(--muted2); }
+  .ibar .sep { color: var(--muted3); }
+  .ibar.red { color: var(--red); }
+
+  /* ── feature row with status ── */
+  .frow {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 11px 0; border-bottom: 1px dashed var(--border);
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .frow:last-child { border-bottom: none; }
+  .frow .st { font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 3px; color: var(--green); background: var(--green-bg); border: 1px solid var(--border-g); min-width: 54px; text-align: center; flex-shrink: 0; }
+  .frow .st.red { color: var(--red); background: var(--red-bg); border-color: var(--border-r); }
+  .frow .st.muted { color: var(--muted); background: transparent; border-color: var(--border); }
+  .frow .txt { flex: 1; }
+  .frow .ttl { display: block; color: var(--fg); font-weight: 500; font-size: 12.5px; margin-bottom: 2px; }
+  .frow .sub { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+
+  /* ── numbered step (01, 02 etc) ── */
+  .step {
+    display: flex; gap: 14px; padding: 11px 0;
+    border-bottom: 1px dashed var(--border);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .step:last-child { border-bottom: none; }
+  .step .n { color: var(--green); font-size: 18px; font-weight: 700; min-width: 30px; line-height: 1.1; }
+  .step .ttl { color: var(--fg); font-size: 12.5px; font-weight: 500; display: block; margin-bottom: 2px; }
+  .step .sub { color: var(--muted); font-size: 10.5px; line-height: 1.45; display: block; }
+
+  /* ── strike pill (for problem slides) ── */
+  .spills { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+  .spill {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    padding: 6px 11px; color: var(--red-dim);
+    border: 1px solid var(--border-r); border-radius: 4px;
+    text-decoration: line-through; text-decoration-color: var(--red);
+  }
+
+  /* ── code block (terminal style) ── */
+  .cb {
+    background: #050505; border: 1px solid var(--border-g); border-radius: 6px;
+    padding: 12px 14px; font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1.6; color: var(--muted2);
+    margin: 6px 0 10px;
+  }
+  .cb .kw { color: #c586c0; }
+  .cb .fn { color: #4fc1ff; }
+  .cb .str { color: var(--green); }
+  .cb .cmt { color: var(--muted3); font-style: italic; }
+  .cb .vr { color: #ff7b72; }
+  .cb .num { color: #f2cc60; }
+  .cb .op { color: #d4d4d4; }
+  .cb .line { display: block; white-space: pre; }
+  .cb .i1 { padding-left: 14px; }
+  .cb .i2 { padding-left: 28px; }
+  .cb .i3 { padding-left: 42px; }
+  .cb .hdr { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .cb .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .cb .fname { font-size: 9.5px; color: var(--muted); margin-left: 4px; letter-spacing: 0.3px; }
+
+  /* ── inline code span ── */
+  .ic { font-family: 'JetBrains Mono', monospace; color: var(--green); background: var(--green-bg); padding: 1px 5px; border-radius: 3px; font-size: 11px; border: 1px solid var(--border-g); }
+  .ic.r { color: var(--red); background: var(--red-bg); border-color: var(--border-r); }
+
+  /* ── callout box ── */
+  .callout {
+    background: rgba(0,255,65,0.04); border-left: 2px solid var(--green);
+    padding: 10px 12px; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted2); line-height: 1.55;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout .lbl { display: block; font-size: 9.5px; color: var(--green); font-weight: 700; letter-spacing: 1.5px; margin-bottom: 4px; }
+
+  /* ── grid boxes (for facts) ── */
+  .gboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 12px; }
+  .gbox {
+    border: 1px solid var(--border-g); border-radius: 4px;
+    padding: 10px 11px; font-family: 'JetBrains Mono', monospace;
+  }
+  .gbox .lbl { font-size: 9.5px; color: var(--green); font-weight: 700; letter-spacing: 1.2px; margin-bottom: 3px; display: block; }
+  .gbox .val { font-size: 11px; color: var(--muted2); line-height: 1.45; display: block; }
+
+  /* ── progress bar ── */
+  .pb { position: absolute; bottom: 0; left: 0; right: 0; padding: 18px 32px 20px; display: flex; align-items: center; gap: 12px; z-index: 10; }
+  .pt { flex: 1; height: 2px; background: rgba(255,255,255,0.1); border-radius: 1px; overflow: hidden; }
+  .pf { height: 100%; background: var(--green); border-radius: 1px; }
+  .pt.red .pf { background: var(--red); }
+  .pl { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted2); white-space: nowrap; }
+  .pl.red { color: var(--red); }
+
+  /* ── swipe arrow ── */
+  .sa { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; z-index: 9; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .sa svg { opacity: 0.5; }
+
+  /* ── nav buttons (preview only, not exported) ── */
+  .nb { position: absolute; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--green-dim); background: rgba(0,0,0,0.8); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 20; color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+  .nbp { left: 10px; } .nbn { right: 10px; }
+
+  /* ── IG footer ── */
+  .ig-actions { display: flex; align-items: center; padding: 10px 14px 6px; gap: 14px; background: #000; }
+  .ig-icon { width: 22px; height: 22px; opacity: 0.7; color: #fff; }
+  .ig-bk { margin-left: auto; }
+  .ig-dots { display: flex; gap: 5px; padding: 0 14px 8px; justify-content: center; background: #000; }
+  .igdot { width: 5px; height: 5px; border-radius: 50%; background: #333; transition: all 0.2s; }
+  .igdot.on { background: var(--green); width: 14px; border-radius: 2px; }
+  .igcap { padding: 4px 14px 14px; font-size: 11px; color: #666; line-height: 1.5; background: #000; font-family: 'JetBrains Mono', monospace; }
+  .igcap strong { color: #ccc; font-weight: 600; }
+
+  /* ── SLIDE 1: COVER hero effect ── */
+  .hero-glow {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 30%, rgba(0,255,65,0.08) 0%, transparent 55%);
+    z-index: 1;
+  }
+  .scanlines {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 4px);
+  }
+
+  /* ── SLIDE 5 diagram (SVG) wrapper ── */
+  .diagram { width: 100%; display: flex; justify-content: center; margin: 6px 0 14px; }
+
+  /* ── SLIDE 10 gradient CTA background ── */
+  .cta-bg {
+    background: radial-gradient(ellipse at 50% 100%, rgba(0,255,65,0.22) 0%, rgba(0,255,65,0.06) 30%, #000 65%);
+  }
+  .cursor-blink {
+    display: inline-block; width: 10px; height: 20px; background: var(--green);
+    vertical-align: middle; margin-left: 4px; animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* hide controls when exporting */
+  .exporting .nb, .exporting .instructions, .exporting .btn-row, .exporting h1.top { display: none; }
+</style>
+</head>
+<body>
+
+<h1 class="top">@uncledullaz / day 41 carousel — terminal aesthetic</h1>
+
+<div class="instructions">
+  <strong>&gt; how to export:</strong>
+  <ol>
+    <li>Click <code>download all as png</code> below — one click, all 10 slides saved.</li>
+    <li>Or manually: swipe to each slide, <code>Cmd + Shift + 4</code> (Mac) / <code>Win + Shift + S</code> (Win), crop to the slide frame.</li>
+    <li>Upload all 10 in order to Instagram as a carousel.</li>
+  </ol>
+</div>
+
+<div class="btn-row">
+  <button class="dl-btn" id="dl-all">[ download all as png ]</button>
+</div>
+
+<div class="cw">
+
+  <!-- IG FRAME -->
+  <div class="igf" id="igf">
+    <div class="igh">
+      <div class="iga">UD</div>
+      <div>
+        <div class="igh-name">uncledullaz</div>
+        <div class="igh-sub">day 41 · google keep · localStorage</div>
+      </div>
+    </div>
+
+    <!-- VIEWPORT -->
+    <div class="vp" id="vp">
+      <div class="track" id="track">
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 1 — COVER / HOOK
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="1">
+          <div class="hero-glow"></div>
+          <div class="scanlines"></div>
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="cr bl"></div><div class="cr br"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/day41</span><span class="dollar">$</span><span class="cmd">cat notes.md</span></div>
+
+            <div style="margin-top: 46px;">
+              <div class="stag">[ #100DAYSOFCODE · DAY 41 ]</div>
+              <h2 class="bh xl">Teaching my<br><span class="g">Google Keep</span><br>to remember.</h2>
+              <p class="cmt" style="margin-top: 14px; font-size: 12.5px;"><span class="slash">//</span> localStorage is where state goes to survive the refresh.</p>
+            </div>
+
+            <div class="ibar">
+              <span><span class="k">stack:</span> vanilla js · localStorage</span>
+              <span class="sep">|</span>
+              <span><span class="k">handle:</span> @uncledullaz</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:10%"></div></div>
+            <span class="pl">01/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 2 — STATE OF THE PROJECT
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="2">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/google-keep</span><span class="dollar">$</span><span class="cmd">ls -la features/</span></div>
+            <div class="stag">[ OK ] PROJECT STATE</div>
+            <h2 class="bh">What it does<br><span class="g">right now.</span></h2>
+            <p class="cmt" style="margin-bottom: 12px;"><span class="slash">//</span> full CRUD on notes, before we added persistence.</p>
+
+            <div class="frow">
+              <span class="st">CREATE</span>
+              <div class="txt"><span class="ttl">Add a note via the form</span><span class="sub"><span class="ic">addNote()</span> spreads a new <span class="ic">Note</span> into the array</span></div>
+            </div>
+            <div class="frow">
+              <span class="st">READ</span>
+              <div class="txt"><span class="ttl">Render notes to the DOM</span><span class="sub"><span class="ic">displayNotes()</span> maps to HTML, writes via <span class="ic">innerHTML</span></span></div>
+            </div>
+            <div class="frow">
+              <span class="st">UPDATE</span>
+              <div class="txt"><span class="ttl">Edit a note in a modal</span><span class="sub"><span class="ic">editNote()</span> triggers on modal close, mutates by id</span></div>
+            </div>
+            <div class="frow">
+              <span class="st">DELETE</span>
+              <div class="txt"><span class="ttl">Archive removes the note</span><span class="sub"><span class="ic">deleteNote()</span> filters the array, re-renders</span></div>
+            </div>
+
+            <div class="ibar">
+              <span>[STATE]</span><span class="sep">·</span><span>4/4 ops online</span><span class="sep">·</span><span>persistence: <span style="color:var(--red)">missing</span></span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:20%"></div></div>
+            <span class="pl">02/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 3 — THE PROBLEM (RED)
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="3">
+          <div class="cr tl red"></div><div class="cr tr red"></div>
+          <div class="cr bl red"></div><div class="cr br red"></div>
+          <div class="sp">
+            <div class="prompt red"><span class="path">~/bug</span><span class="dollar">$</span><span class="cmd">diagnose --persistence</span></div>
+
+            <!-- red diagram: data falling off a cliff -->
+            <div class="diagram" style="margin: 10px 0 18px;">
+              <svg width="280" height="120" viewBox="0 0 280 120" fill="none">
+                <!-- box representing memory -->
+                <rect x="14" y="20" width="90" height="50" rx="4" stroke="#FF2E4D" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.8"/>
+                <text x="59" y="42" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#FF2E4D" opacity="0.9">this.notes</text>
+                <text x="59" y="56" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#B91C1C">[Note, Note, Note]</text>
+                <!-- arrow to cliff -->
+                <path d="M110 45 L170 45" stroke="#FF2E4D" stroke-width="1.5" opacity="0.7"/>
+                <path d="M162 40 L170 45 L162 50" stroke="#FF2E4D" stroke-width="1.5" fill="none"/>
+                <text x="140" y="36" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#9CA3AF">F5</text>
+                <!-- cliff / falling dots -->
+                <rect x="176" y="20" width="90" height="30" rx="2" stroke="#FF2E4D" stroke-width="1.5" opacity="0.4"/>
+                <text x="221" y="38" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#FF2E4D" opacity="0.8">{ empty }</text>
+                <!-- falling x marks -->
+                <text x="188" y="78" font-family="JetBrains Mono" font-size="12" fill="#FF2E4D" opacity="0.6">x</text>
+                <text x="210" y="92" font-family="JetBrains Mono" font-size="12" fill="#FF2E4D" opacity="0.4">x</text>
+                <text x="234" y="105" font-family="JetBrains Mono" font-size="12" fill="#FF2E4D" opacity="0.3">x</text>
+                <text x="255" y="82" font-family="JetBrains Mono" font-size="12" fill="#FF2E4D" opacity="0.5">x</text>
+                <!-- labels -->
+                <text x="59" y="88" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B7280">memory</text>
+                <text x="221" y="65" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B7280">after refresh</text>
+              </svg>
+            </div>
+
+            <div class="stag red">△ SYSTEM ERROR</div>
+            <h2 class="bh">Refresh the page.<br><span class="r">Notes vanish.</span></h2>
+            <p class="cmt" style="margin-bottom: 10px;"><span class="slash">//</span> the array lives in RAM. RAM clears on reload.</p>
+
+            <div class="spills">
+              <span class="spill">memory only</span>
+              <span class="spill">zero persistence</span>
+              <span class="spill">state dies on F5</span>
+              <span class="spill">no recovery</span>
+            </div>
+
+            <div class="ibar red">
+              <span>[ERR] notes.length = 0</span>
+              <span class="sep">·</span>
+              <span>99% of beginner apps stuck here</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#FF2E4D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt red"><div class="pf" style="width:30%"></div></div>
+            <span class="pl red">03/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 4 — THE SOLUTION (GREEN)
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="4">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="cr bl"></div><div class="cr br"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/fix</span><span class="dollar">$</span><span class="cmd">enable localStorage</span></div>
+
+            <div class="stag">✓ SOLUTION LOADED</div>
+            <h2 class="bh">Meet<br><span class="g">localStorage.</span></h2>
+            <p class="body" style="margin-bottom: 14px;">Your browser's filing cabinet. Key-value store. Survives refresh. Survives tabs closing. Built into every modern browser. Free.</p>
+
+            <div class="gboxes">
+              <div class="gbox">
+                <span class="lbl">[API]</span>
+                <span class="val">setItem() · getItem() · removeItem() · clear()</span>
+              </div>
+              <div class="gbox">
+                <span class="lbl">[TYPE]</span>
+                <span class="val">strings only. JSON converts anything.</span>
+              </div>
+              <div class="gbox">
+                <span class="lbl">[LIMIT]</span>
+                <span class="val">~5MB per origin. Plenty for notes.</span>
+              </div>
+              <div class="gbox">
+                <span class="lbl">[SCOPE]</span>
+                <span class="val">per origin. localhost ≠ prod.</span>
+              </div>
+            </div>
+
+            <p class="cmt"><span class="slash">//</span> one method stores it, one method reads it back.</p>
+
+            <div class="ibar">
+              <span>[OK] browser.support = 97.2%</span><span class="sep">·</span><span>since IE8</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:40%"></div></div>
+            <span class="pl">04/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 5 — DIAGRAM: THE SAVE/LOAD CYCLE
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="5">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="cr bl"></div><div class="cr br"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/google-keep</span><span class="dollar">$</span><span class="cmd">visualize --cycle</span></div>
+            <div class="stag">[ DIAGRAM ] THE SAVE ↔ LOAD CYCLE</div>
+            <h2 class="bh sm">Two methods.<br><span class="g">One filing cabinet.</span></h2>
+
+            <div class="diagram" style="margin: 18px 0;">
+              <svg width="340" height="290" viewBox="0 0 340 290" fill="none">
+                <!-- memory box (top) -->
+                <rect x="80" y="10" width="180" height="54" rx="6" stroke="#00FF41" stroke-width="1.5"/>
+                <text x="170" y="30" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00FF41">this.notes</text>
+                <text x="170" y="46" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#9CA3AF">[ Note, Note, Note ... ]</text>
+                <text x="170" y="58" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B7280">(lives in memory)</text>
+
+                <!-- down arrow (save) -->
+                <line x1="170" y1="70" x2="170" y2="108" stroke="#00FF41" stroke-width="1.5"/>
+                <path d="M164 102 L170 108 L176 102" stroke="#00FF41" stroke-width="1.5" fill="none"/>
+                <text x="180" y="86" font-family="JetBrains Mono" font-size="9" fill="#00FF41">JSON.stringify()</text>
+                <text x="180" y="98" font-family="JetBrains Mono" font-size="8" fill="#6B7280">saveNotes()</text>
+
+                <!-- localStorage box -->
+                <rect x="50" y="115" width="240" height="60" rx="6" stroke="#00FF41" stroke-width="1.5" fill="rgba(0,255,65,0.04)"/>
+                <text x="170" y="136" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00FF41">localStorage["notes"]</text>
+                <text x="170" y="152" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#9CA3AF">"[{id:1,title:..},{id:2,title:..}]"</text>
+                <text x="170" y="166" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B7280">(lives on disk — survives refresh)</text>
+
+                <!-- up arrow (load) -->
+                <line x1="170" y1="181" x2="170" y2="218" stroke="#00FF41" stroke-width="1.5"/>
+                <path d="M164 188 L170 181 L176 188" stroke="#00FF41" stroke-width="1.5" fill="none"/>
+                <text x="180" y="200" font-family="JetBrains Mono" font-size="9" fill="#00FF41">JSON.parse()</text>
+                <text x="180" y="212" font-family="JetBrains Mono" font-size="8" fill="#6B7280">on constructor</text>
+
+                <!-- memory box (bottom, = top) -->
+                <rect x="80" y="224" width="180" height="54" rx="6" stroke="#00FF41" stroke-width="1.5" stroke-dasharray="3 3"/>
+                <text x="170" y="244" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00FF41">this.notes</text>
+                <text x="170" y="260" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#9CA3AF">[ Note, Note, Note ... ]</text>
+                <text x="170" y="272" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B7280">(rehydrated on load)</text>
+              </svg>
+            </div>
+
+            <div class="ibar">
+              <span>[FLOW]</span><span class="sep">·</span><span>write on change</span><span class="sep">·</span><span>read on boot</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:50%"></div></div>
+            <span class="pl">05/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 6 — KEY CODE #1: SAVE
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="6">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/google-keep</span><span class="dollar">$</span><span class="cmd">cat app.js | grep -A 3 save</span></div>
+            <div class="stag">[ CODE ] 01 · SAVE ON EVERY CHANGE</div>
+            <h2 class="bh sm">Saving is<br><span class="g">one function.</span></h2>
+
+            <div class="cb">
+              <div class="hdr">
+                <span class="dot" style="background:#FF5F57"></span>
+                <span class="dot" style="background:#FEBC2E"></span>
+                <span class="dot" style="background:#28C840"></span>
+                <span class="fname">app.js</span>
+              </div>
+              <span class="line"><span class="cmt">// write the notes array to disk</span></span>
+              <span class="line"><span class="fn">saveNotes</span>() {</span>
+              <span class="line i1"><span class="vr">localStorage</span>.<span class="fn">setItem</span>(<span class="str">"notes"</span>, <span class="vr">JSON</span>.<span class="fn">stringify</span>(<span class="kw">this</span>.notes));</span>
+              <span class="line">}</span>
+              <span class="line"></span>
+              <span class="line"><span class="cmt">// every CRUD op calls render() — not displayNotes() anymore</span></span>
+              <span class="line"><span class="fn">render</span>() {</span>
+              <span class="line i1"><span class="kw">this</span>.<span class="fn">saveNotes</span>();</span>
+              <span class="line i1"><span class="kw">this</span>.<span class="fn">displayNotes</span>();</span>
+              <span class="line">}</span>
+            </div>
+
+            <div class="callout">
+              <span class="lbl">[ INSIGHT ]</span>
+              One <span class="ic">render()</span> wraps two jobs: persist, then repaint. Call it from every CRUD method and you literally cannot forget to save.
+            </div>
+
+            <div class="ibar">
+              <span>[SRC] dom-google-keep/day-38/app.js</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:60%"></div></div>
+            <span class="pl">06/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 7 — KEY CODE #2: LOAD
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="7">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/google-keep</span><span class="dollar">$</span><span class="cmd">cat app.js | head -20</span></div>
+            <div class="stag">[ CODE ] 02 · LOAD ON STARTUP</div>
+            <h2 class="bh sm">Loading is<br><span class="g">one line.</span></h2>
+
+            <div class="cb">
+              <div class="hdr">
+                <span class="dot" style="background:#FF5F57"></span>
+                <span class="dot" style="background:#FEBC2E"></span>
+                <span class="dot" style="background:#28C840"></span>
+                <span class="fname">app.js · constructor()</span>
+              </div>
+              <span class="line"><span class="kw">class</span> <span class="fn">App</span> {</span>
+              <span class="line i1"><span class="fn">constructor</span>() {</span>
+              <span class="line i2"><span class="cmt">// rehydrate notes from disk on boot</span></span>
+              <span class="line i2"><span class="kw">this</span>.notes = <span class="vr">JSON</span>.<span class="fn">parse</span>(</span>
+              <span class="line i3"><span class="vr">localStorage</span>.<span class="fn">getItem</span>(<span class="str">"notes"</span>)</span>
+              <span class="line i2">) <span class="op">||</span> [];</span>
+              <span class="line"></span>
+              <span class="line i2"><span class="kw">this</span>.<span class="fn">addEventListeners</span>();</span>
+              <span class="line i2"><span class="kw">this</span>.<span class="fn">displayNotes</span>();</span>
+              <span class="line i1">}</span>
+              <span class="line">}</span>
+            </div>
+
+            <div class="callout">
+              <span class="lbl">[ GOTCHA ]</span>
+              The <span class="ic">|| []</span> fallback is the unsung hero. First ever load has no <span class="ic">"notes"</span> key — without it, <span class="ic">JSON.parse(null)</span> returns <span class="ic">null</span> and <span class="ic">.map()</span> crashes with <span class="ic r">TypeError</span>.
+            </div>
+
+            <div class="ibar">
+              <span>[SRC] dom-google-keep/day-38/app.js#L16</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:70%"></div></div>
+            <span class="pl">07/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 8 — CRUD AS TERMINAL COMMANDS
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="8">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/notes.state</span><span class="dollar">$</span><span class="cmd">history</span></div>
+            <div class="stag">[ OPS ] 4 VERBS · 1 CABINET</div>
+            <h2 class="bh sm">Every op calls<br><span class="g">render().</span></h2>
+            <p class="cmt" style="margin-bottom: 8px;"><span class="slash">//</span> which means every op also calls saveNotes().</p>
+
+            <div class="step">
+              <span class="n">01</span>
+              <div><span class="ttl">CREATE · <span class="ic">addNote()</span></span><span class="sub">new <span class="ic">Note</span> instance → spread into <span class="ic">this.notes</span> → <span class="ic">render()</span></span></div>
+            </div>
+            <div class="step">
+              <span class="n">02</span>
+              <div><span class="ttl">READ · <span class="ic">displayNotes()</span></span><span class="sub"><span class="ic">map()</span> over array → template literal → <span class="ic">innerHTML</span></span></div>
+            </div>
+            <div class="step">
+              <span class="n">03</span>
+              <div><span class="ttl">UPDATE · <span class="ic">editNote(id, data)</span></span><span class="sub"><span class="ic">map()</span> to find by id → mutate matching note → <span class="ic">render()</span></span></div>
+            </div>
+            <div class="step">
+              <span class="n">04</span>
+              <div><span class="ttl">DELETE · <span class="ic">deleteNote(id)</span></span><span class="sub"><span class="ic">filter()</span> out the id → <span class="ic">render()</span></span></div>
+            </div>
+
+            <div class="ibar">
+              <span>[PATTERN]</span><span class="sep">·</span><span>mutate array</span><span class="sep">→</span><span>render()</span><span class="sep">→</span><span>persist + repaint</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:80%"></div></div>
+            <span class="pl">08/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 9 — CHALLENGES SHIPPED
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide" data-slide="9">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="sp">
+            <div class="prompt"><span class="path">~/day41</span><span class="dollar">$</span><span class="cmd">ls challenges/ &amp;&amp; echo "all pass"</span></div>
+            <div class="stag">[ SHIPPED ] 4 CHALLENGES · ALL GREEN</div>
+            <h2 class="bh sm">What I'm<br><span class="g">practising.</span></h2>
+
+            <div class="frow">
+              <span class="st">PASS</span>
+              <div class="txt"><span class="ttl">chal-1 · User-Driven Input Display</span><span class="sub"><span class="ic">getElementById</span> → <span class="ic">click</span> listener → <span class="ic">textContent</span> sync</span></div>
+            </div>
+            <div class="frow">
+              <span class="st">PASS</span>
+              <div class="txt"><span class="ttl">chal-2 · Graceful Modal Closure</span><span class="sub"><span class="ic">DOMContentLoaded</span> wrapper → open/close via <span class="ic">style.display</span></span></div>
+            </div>
+            <div class="frow">
+              <span class="st">PASS</span>
+              <div class="txt"><span class="ttl">chal-3 · Dynamic Resizer</span><span class="sub"><span class="ic">mouseover</span> / <span class="ic">mouseout</span> swap width + innerHTML</span></div>
+            </div>
+            <div class="frow">
+              <span class="st">PASS</span>
+              <div class="txt"><span class="ttl">chal-4 · Local Storage Vault</span><span class="sub"><span class="ic">setItem</span> / <span class="ic">getItem</span> / <span class="ic">removeItem</span> with empty-string guard</span></div>
+            </div>
+
+            <div class="ibar">
+              <span>[REPO] github.com/AbdullahAliCodes/javascript-practice</span>
+            </div>
+          </div>
+          <div class="sa"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#00FF41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:90%"></div></div>
+            <span class="pl">09/10</span>
+          </div>
+        </div>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             SLIDE 10 — CTA
+        ═════════════════════════════════════════════════════════════ -->
+        <div class="slide cta-bg" data-slide="10">
+          <div class="cr tl"></div><div class="cr tr"></div>
+          <div class="cr bl"></div><div class="cr br"></div>
+          <div class="sp" style="justify-content: center;">
+            <div class="prompt" style="margin-bottom: 38px;"><span class="path">~/100days</span><span class="dollar">$</span><span class="cmd">commit -m "day 41"</span></div>
+
+            <div class="stag">[ STATUS ] STILL SHIPPING</div>
+            <h2 class="bh xl">41 days in.<br><span class="g">Still building.</span></h2>
+            <p class="cmt" style="margin-top: 18px; font-size: 13px;"><span class="slash">//</span> every day. one concept. real code.<span class="cursor-blink"></span></p>
+
+            <div style="margin-top: 42px; padding: 16px; border: 1px solid var(--border-g); border-radius: 6px; background: rgba(0,255,65,0.04);">
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green); letter-spacing: 1.5px; font-weight: 700; margin-bottom: 8px;">[ FOLLOW FOR MORE ]</div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #fff; font-weight: 700;">@uncledullaz</div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--muted2); margin-top: 4px;">javascript · dom · building-in-public</div>
+            </div>
+
+            <div class="ibar" style="margin-top: auto;">
+              <span>[REPO] github.com/AbdullahAliCodes</span><span class="sep">·</span><span>#100DaysOfCode</span>
+            </div>
+          </div>
+          <!-- NO swipe arrow on last slide -->
+          <div class="pb">
+            <div class="pt"><div class="pf" style="width:100%"></div></div>
+            <span class="pl">10/10</span>
+          </div>
+        </div>
+
+      </div>
+      <button class="nb nbp" id="prev">‹</button>
+      <button class="nb nbn" id="next">›</button>
+    </div>
+
+    <div class="ig-actions">
+      <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      <svg class="ig-icon ig-bk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </div>
+
+    <div class="ig-dots" id="dots">
+      <div class="igdot on"></div><div class="igdot"></div><div class="igdot"></div>
+      <div class="igdot"></div><div class="igdot"></div><div class="igdot"></div>
+      <div class="igdot"></div><div class="igdot"></div><div class="igdot"></div>
+      <div class="igdot"></div>
+    </div>
+
+    <div class="igcap">
+      <strong>uncledullaz</strong> day 41 / 100 — teaching my google keep clone to remember. localStorage, the save/load cycle, and why <code style="color: var(--green)">|| []</code> is the unsung hero. 🟢<br>
+      <span style="color: #444;">14 MINUTES AGO</span>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  // ── swipe / nav ──
+  const track = document.getElementById('track');
+  const vp = document.getElementById('vp');
+  const dots = document.querySelectorAll('.igdot');
+  const slides = document.querySelectorAll('.slide');
+  let idx = 0;
+  const total = slides.length;
+
+  function goTo(i) {
+    idx = Math.max(0, Math.min(total - 1, i));
+    track.style.transform = `translateX(-${idx * 100}%)`;
+    dots.forEach((d, j) => d.classList.toggle('on', j === idx));
+  }
+  document.getElementById('prev').addEventListener('click', () => goTo(idx - 1));
+  document.getElementById('next').addEventListener('click', () => goTo(idx + 1));
+  dots.forEach((d, j) => d.addEventListener('click', () => goTo(j)));
+
+  // ── drag to swipe ──
+  let startX = 0, dragging = false, dragOffset = 0;
+  vp.addEventListener('pointerdown', (e) => { dragging = true; startX = e.clientX; track.style.transition = 'none'; });
+  vp.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dragOffset = e.clientX - startX;
+    track.style.transform = `translateX(calc(-${idx * 100}% + ${dragOffset}px))`;
+  });
+  vp.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    track.style.transition = '';
+    if (dragOffset < -50) goTo(idx + 1);
+    else if (dragOffset > 50) goTo(idx - 1);
+    else goTo(idx);
+    dragOffset = 0;
+  });
+  vp.addEventListener('pointerleave', () => { if (dragging) { dragging = false; track.style.transition = ''; goTo(idx); dragOffset = 0; } });
+
+  // ── download all as png ──
+  // Strategy: clone each slide into an off-screen wrapper fixed at 480x640 (the preview size),
+  // then let html2canvas handle the 2.25x upscale to 1080x1440 natively via its `scale` option.
+  const dlBtn = document.getElementById('dl-all');
+  dlBtn.addEventListener('click', async () => {
+    dlBtn.disabled = true;
+    dlBtn.textContent = '[ rendering... 0/10 ]';
+    for (let i = 0; i < slides.length; i++) {
+      dlBtn.textContent = `[ rendering... ${i + 1}/10 ]`;
+      const clone = slides[i].cloneNode(true);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:480px;height:640px;background:#000;overflow:hidden;z-index:-1;';
+      clone.style.cssText += ';width:480px;height:640px;min-width:480px;flex:none;';
+      wrap.appendChild(clone);
+      document.body.appendChild(wrap);
+      try {
+        const canvas = await html2canvas(wrap, {
+          width: 480, height: 640,
+          scale: 2.25, // 480 * 2.25 = 1080 ; 640 * 2.25 = 1440 (3:4 at IG spec)
+          backgroundColor: '#000',
+          useCORS: true,
+          logging: false,
+          allowTaint: true
+        });
+        const link = document.createElement('a');
+        link.download = `day41_slide_${String(i + 1).padStart(2, '0')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error('render failed slide', i + 1, err);
+      }
+      document.body.removeChild(wrap);
+      await new Promise(r => setTimeout(r, 150));
+    }
+    dlBtn.disabled = false;
+    dlBtn.textContent = '[ download all as png ]';
+  });
+</script>
+</body>
+</html>
