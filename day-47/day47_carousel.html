@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@uncledullaz / day 47 &mdash; amazon clone routing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+      :root{
+        --bg:#000000;--fg:#ffffff;
+        --green:#00ff41;--green-dim:#00b82f;--green-bg:rgba(0,255,65,0.08);
+        --react:#60dcfc;--react-bg:rgba(96,220,252,0.08);--react-bd:rgba(96,220,252,0.22);
+        --muted:#6b7280;--muted2:#9ca3af;--muted3:#4b5563;
+        --border:rgba(255,255,255,0.08);--border-g:rgba(0,255,65,0.2);
+      }
+      html,body{background:#1a1a1a;}
+      body{display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:40px 16px;font-family:"JetBrains Mono",monospace;}
+      h1.top{font-size:14px;font-weight:500;color:#888;margin-bottom:16px;letter-spacing:0.5px;}
+      .instructions{max-width:480px;width:100%;background:#0e0e0e;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin-bottom:20px;font-size:12px;color:#999;line-height:1.6;}
+      .instructions strong{color:var(--green);font-weight:500;}
+      .instructions ol{padding-left:18px;margin-top:6px;}
+      .instructions code{color:var(--green);background:var(--green-bg);padding:1px 5px;border-radius:3px;font-size:11px;}
+      .btn-row{display:flex;gap:10px;max-width:480px;width:100%;margin-bottom:20px;}
+      .dl-btn{flex:1;background:transparent;color:var(--green);border:1px solid var(--green-dim);border-radius:6px;padding:12px 14px;font-size:12px;font-weight:500;cursor:pointer;letter-spacing:0.5px;transition:all 0.2s;font-family:"JetBrains Mono",monospace;}
+      .dl-btn:hover{background:var(--green-bg);}
+      .dl-btn:disabled{opacity:0.4;cursor:wait;}
+      .dl-single{flex:1;background:transparent;color:var(--muted2);border:1px solid #2a2a2a;border-radius:6px;padding:9px 4px;font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;cursor:pointer;letter-spacing:0.3px;transition:all 0.2s;}
+      .dl-single:hover{background:var(--green-bg);color:var(--green);border-color:var(--green-dim);}
+      .dl-single:disabled{opacity:0.3;cursor:wait;}
+      .btn-singles{display:flex;gap:6px;max-width:480px;width:100%;margin-bottom:12px;flex-wrap:wrap;}
+      .exporting .nb,.exporting .instructions,.exporting .btn-row,.exporting h1.top,.exporting .btn-singles{display:none;}
+      .cw{width:100%;max-width:480px;}
+      .igf{background:#000;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;box-shadow:0 2px 30px rgba(0,0,0,0.5);}
+      .igh{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #1a1a1a;background:#0a0a0a;}
+      .iga{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--green);background:#111;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--green);font-weight:700;flex-shrink:0;}
+      .igh-name{font-weight:600;font-size:13px;color:#eee;}
+      .igh-sub{font-size:10px;color:#555;}
+      .vp{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;background:#000;}
+      .track{display:flex;height:100%;transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);cursor:grab;}
+      .track:active{cursor:grabbing;}
+      .slide{min-width:100%;height:100%;position:relative;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);}
+      .cr{position:absolute;width:26px;height:26px;border:1.5px solid var(--green);opacity:0.55;z-index:5;pointer-events:none;}
+      .cr.tl{top:18px;left:18px;border-right:none;border-bottom:none;}
+      .cr.tr{top:18px;right:18px;border-left:none;border-bottom:none;}
+      .cr.bl{bottom:56px;left:18px;border-right:none;border-top:none;}
+      .cr.br{bottom:56px;right:18px;border-left:none;border-top:none;}
+      .cr.rc{border-color:var(--react);}
+      .sp{padding:30px 32px 60px;display:flex;flex-direction:column;height:100%;position:relative;z-index:2;}
+      .prompt{font-size:13px;line-height:1.4;margin-bottom:14px;}
+      .prompt .path{color:var(--green);}
+      .prompt .dollar{color:var(--green);margin:0 5px;}
+      .prompt .cmd{color:var(--fg);}
+      .prompt.rp .path,.prompt.rp .dollar{color:var(--react);}
+      .cmt{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px;}
+      .cmt .slash{color:var(--muted3);}
+      .stag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--green);padding:3px 0;margin-bottom:10px;}
+      .stag.rc{color:var(--react);}
+      .bh{font-weight:800;font-size:34px;line-height:1.1;letter-spacing:-0.5px;color:var(--fg);margin:4px 0 14px;}
+      .bh .g{color:var(--green);}
+      .bh .rc{color:var(--react);}
+      .bh.sm{font-size:26px;}
+      .bh.xl{font-size:34px;}
+      .bh.vis-xl{font-size:42px;line-height:1.1;letter-spacing:-1px;margin:18px 0 8px;}
+      .cta-head-row{display:flex;align-items:center;gap:14px;}
+      .cta-head-row .bh{margin:4px 0 14px;}
+      .cta-head-row .dp-circle.cta-dp{width:75px;height:75px;border:2px solid var(--green);}
+      .ibar{margin-top:auto;font-size:10px;color:var(--green);letter-spacing:0.5px;display:flex;gap:14px;flex-wrap:wrap;padding-bottom:4px;}
+      .ibar .k{color:var(--muted2);}
+      .ibar .sep{color:var(--muted3);}
+      .frow{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px dashed var(--border);font-size:12px;}
+      .frow:last-of-type{border-bottom:none;}
+      .frow .st{font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:3px;color:var(--green);background:var(--green-bg);border:1px solid var(--border-g);min-width:56px;text-align:center;flex-shrink:0;}
+      .frow .st.rc{color:var(--react);background:var(--react-bg);border-color:var(--react-bd);}
+      .frow .txt{flex:1;}
+      .frow .ttl{display:block;color:var(--fg);font-weight:500;font-size:12.5px;margin-bottom:2px;}
+      .frow .sub{display:block;color:var(--muted);font-size:10.5px;line-height:1.45;}
+      .step{display:flex;gap:14px;padding:10px 0;border-bottom:1px dashed var(--border);}
+      .step:last-of-type{border-bottom:none;}
+      .step .n{color:var(--react);font-size:18px;font-weight:700;min-width:30px;line-height:1.1;}
+      .step .ttl{color:var(--fg);font-size:12.5px;font-weight:500;display:block;margin-bottom:2px;}
+      .step .sub{color:var(--muted);font-size:10.5px;line-height:1.45;display:block;}
+      .ic{font-size:11px;color:var(--green);background:var(--green-bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border-g);}
+      .ic.rc{color:var(--react);background:var(--react-bg);border-color:var(--react-bd);}
+      .pb{position:absolute;bottom:0;left:0;right:0;padding:18px 32px 20px;display:flex;align-items:center;gap:12px;z-index:10;}
+      .pt{flex:1;height:2px;background:rgba(255,255,255,0.1);border-radius:1px;overflow:hidden;}
+      .pf{height:100%;background:var(--green);border-radius:1px;}
+      .pf.rc{background:var(--react);}
+      .pl{font-size:10px;color:var(--muted2);white-space:nowrap;}
+      .pl.rc{color:var(--react);}
+      .sa{position:absolute;right:0;top:50%;transform:translateY(-50%);width:40px;height:40px;z-index:9;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+      .sa svg{opacity:0.5;}
+      .nb{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:1px solid var(--green-dim);background:rgba(0,0,0,0.8);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:20;color:var(--green);font-size:14px;}
+      .nbp{left:10px;}
+      .nbn{right:10px;}
+      .ig-actions{display:flex;align-items:center;padding:10px 14px 6px;gap:14px;background:#000;}
+      .ig-icon{width:22px;height:22px;opacity:0.7;color:#fff;}
+      .ig-bk{margin-left:auto;}
+      .ig-dots{display:flex;gap:5px;padding:0 14px 8px;justify-content:center;background:#000;}
+      .igdot{width:5px;height:5px;border-radius:50%;background:#333;transition:all 0.2s;cursor:pointer;}
+      .igdot.on{background:var(--green);width:14px;border-radius:2px;}
+      .igcap{padding:4px 14px 14px;font-size:11px;color:#666;line-height:1.5;background:#000;}
+      .igcap strong{color:#ccc;font-weight:600;}
+      .dp-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+      .dp-row .prompt{margin-bottom:0;flex:1;min-width:0;}
+      .dp-circle{width:44px;height:44px;border-radius:50%;border:2px solid var(--green);overflow:hidden;flex-shrink:0;background:#111;}
+      .dp-circle img{width:100%;height:100%;object-fit:cover;}
+      .cover-taglines{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+      .cover-taglines .tagline{font-size:18px;font-weight:800;letter-spacing:0.12em;color:var(--green);line-height:1.15;white-space:nowrap;}
+      .sp-cover>.cover-taglines{margin-top:36px;align-self:flex-start;max-width:calc(100% - 8px);}
+      .hero-glow{position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 70% 50%,rgba(96,220,252,0.13) 0%,rgba(0,255,65,0.04) 40%,transparent 65%);}
+      .scanlines{position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(255,255,255,0.015) 3px,rgba(255,255,255,0.015) 4px);}
+      .react-hero{position:absolute;right:-120px;top:50%;transform:translateY(-50%);width:360px;height:360px;z-index:3;pointer-events:none;opacity:0.88;filter:drop-shadow(0 0 50px rgba(96,220,252,0.3));}
+      .logo-row{position:absolute;top:22px;right:22px;display:flex;gap:8px;z-index:10;}
+      .logo-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);overflow:hidden;}
+      .logo-icon img{width:100%;height:100%;object-fit:contain;display:block;}
+      .logo-row--cover .logo-icon{width:56px;height:56px;background:transparent;border:none;box-shadow:none;}
+      .logo-row--dual>.logo-icon:first-child,.logo-row--dual>.logo-icon:last-child{background:transparent;border:none;box-shadow:none;}
+      .slide.lt .logo-row--dual>.logo-icon:first-child,.slide.lt .logo-row--dual>.logo-icon:last-child{background:transparent;border:none;}
+      .sp-cover{padding:30px 32px 60px;display:flex;flex-direction:column;height:100%;position:relative;z-index:4;}
+      .sp-cover .content{max-width:240px;}
+      .visual-stack{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+      .visual-card{position:relative;border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;background:#0a0a0a;}
+      .slide.lt .visual-card{border-color:rgba(0,0,0,0.16);background:#fff;}
+      .visual-card img{display:block;width:100%;height:96px;object-fit:cover;}
+      .visual-label{position:absolute;top:7px;left:7px;font-size:9px;letter-spacing:1.1px;font-weight:700;padding:3px 6px;border-radius:4px;background:rgba(0,0,0,0.72);color:#fff;}
+      #slide-0.lt .hero-glow{background:radial-gradient(ellipse at 70% 50%,rgba(2,132,199,0.12) 0%,rgba(0,122,32,0.06) 42%,transparent 70%);}
+      #slide-0.lt .scanlines{background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 4px);}
+      .code-block{background:#080808;border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:14px 16px;font-size:10.5px;line-height:1.7;margin:8px 0;overflow:hidden;flex:1;white-space:pre;}
+      .code-block.sm{font-size:10px;line-height:1.65;}
+      .code-block .file-label{font-size:9.5px;color:var(--muted3);letter-spacing:1px;margin-bottom:6px;display:block;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;}
+      .cb-kw{color:#c586c0;}
+      .cb-fn{color:#dcdcaa;}
+      .cb-str{color:#ce9178;}
+      .cb-tag{color:#4ec9b0;}
+      .cb-attr{color:#9cdcfe;}
+      .cb-cm{color:#5a7a52;}
+      .cb-var{color:#9cdcfe;}
+      .cb-punc{color:#808080;}
+      .cb-num{color:#b5cea8;}
+      .code-divider{height:1px;background:rgba(255,255,255,0.06);margin:8px 0;}
+      .xrow{display:flex;gap:0;margin-bottom:10px;}
+      .xrow .xcol{flex:1;padding:12px 14px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;background:#080808;}
+      .xrow .xcol+.xcol{margin-left:8px;}
+      .xcol .xlbl{font-size:9px;font-weight:700;letter-spacing:1.5px;margin-bottom:6px;display:block;}
+      .xcol .xlbl.gr{color:var(--green);}
+      .xcol .xlbl.rc{color:var(--react);}
+      .xcol .xlbl.mt{color:var(--muted2);}
+      .xcol p{font-size:10.5px;color:var(--muted2);line-height:1.5;}
+      .xcol .mini-code{font-size:9.5px;color:var(--muted2);line-height:1.6;margin-top:6px;white-space:pre;}
+      .xcol .mini-code .hlt{color:var(--react);}
+      .slide.lt{background:#f5f5ef;}
+      .slide.lt .cr{border-color:#00b82f;opacity:0.6;}
+      .slide.lt .prompt .path{color:#007a20;}
+      .slide.lt .prompt .dollar{color:#007a20;}
+      .slide.lt .prompt .cmd{color:#141210;}
+      .slide.lt .stag{color:#007a20;}
+      .slide.lt .bh{color:#141210;}
+      .slide.lt .bh .g{color:#007a20;}
+      .slide.lt .cmt{color:#999;}
+      .slide.lt .cmt .slash{color:#ccc;}
+      .slide.lt .ibar{color:#007a20;}
+      .slide.lt .ibar .k{color:#777;}
+      .slide.lt .ibar .sep{color:#bbb;}
+      .slide.lt .pb .pt{background:rgba(0,0,0,0.09);}
+      .slide.lt .pb .pf{background:#00b82f;}
+      .slide.lt .pl{color:#777;}
+      .slide.lt .sa svg{opacity:0.2;}
+      .slide.lt .frow{border-color:rgba(0,0,0,0.09);}
+      .slide.lt .frow .ttl{color:#141210;}
+      .slide.lt .frow .sub{color:#777;}
+      .slide.lt .step{border-color:rgba(0,0,0,0.09);}
+      .slide.lt.rlt .cr{border-color:#0284c7;}
+      .slide.lt.rlt .prompt .path{color:#0284c7;}
+      .slide.lt.rlt .prompt .dollar{color:#0284c7;}
+      .slide.lt.rlt .stag{color:#0284c7;}
+      .slide.lt.rlt .bh .rc{color:#0369a1;}
+      .slide.lt.rlt .step .n{color:#0284c7;}
+      .slide.lt.rlt .step .ttl{color:#141210;}
+      .slide.lt.rlt .step .sub{color:#777;}
+      .slide.lt.rlt .ic.rc{color:#0284c7;background:rgba(2,132,199,0.09);border-color:rgba(2,132,199,0.25);}
+      .slide.lt.rlt .ibar{color:#0284c7;}
+      .slide.lt.rlt .pb .pf{background:#0284c7;}
+      .slide.lt.rlt .pl{color:#777;}
+      .slide.lt.rlt .sa svg{opacity:0.2;}
+      .slide.lt .code-block{background:#f0ede4;border-color:rgba(0,0,0,0.1);color:#141210;}
+      .slide.lt .cb-kw{color:#8a3191;}
+      .slide.lt .cb-fn{color:#795e26;}
+      .slide.lt .cb-str{color:#a31515;}
+      .slide.lt .cb-tag{color:#267f99;}
+      .slide.lt .cb-attr{color:#0000ff;}
+      .slide.lt .cb-cm{color:#6a9955;}
+      .slide.lt .cb-var{color:#001080;}
+      .slide.lt .cb-punc{color:#555;}
+      .slide.lt .cb-num{color:#098658;}
+      .slide.lt .frow .st{color:#007a20;background:rgba(0,122,32,0.08);border-color:rgba(0,122,32,0.2);}
+      .slide.lt .frow .st.rc{color:#0284c7;background:rgba(2,132,199,0.08);border-color:rgba(2,132,199,0.2);}
+      .cta-bg{background:radial-gradient(ellipse at 50% 100%,rgba(0,255,65,0.22) 0%,rgba(0,255,65,0.06) 30%,#000 65%);}
+      .cursor-blink{display:inline-block;width:10px;height:20px;background:var(--green);vertical-align:middle;margin-left:4px;animation:blink 1s steps(2) infinite;}
+      @keyframes blink{50%{opacity:0;}}
+    </style>
+  </head>
+  <body>
+    <h1 class="top">@uncledullaz / day 47 &mdash; amazon clone routing</h1>
+    <div class="instructions">
+      <strong>&gt; how to export:</strong>
+      <ol>
+        <li>Wait 2&ndash;3s for Google Fonts to load, then click <code>download all 8 slides</code>.</li>
+        <li>Top-corner logos use <code>../amazon-logo.png</code> and <code>../react-logo.svg.png</code> (parent folder). Serve <code>day-47/</code> over <code>http://localhost</code> so PNG export can inline them.</li>
+        <li>Upload all 8 slides in order to Instagram as a carousel.</li>
+      </ol>
+    </div>
+    <div class="btn-row">
+      <button class="dl-btn" id="dl-all">download all 8 slides</button>
+    </div>
+    <div class="btn-singles"><button class="dl-single" id="dl-0">[01]</button><button class="dl-single" id="dl-1">[02]</button><button class="dl-single" id="dl-2">[03]</button><button class="dl-single" id="dl-3">[04]</button><button class="dl-single" id="dl-4">[05]</button><button class="dl-single" id="dl-5">[06]</button><button class="dl-single" id="dl-6">[07]</button><button class="dl-single" id="dl-7">[08]</button></div>
+    <div class="cw">
+      <div class="igf">
+        <div class="igh">
+          <div class="iga">ud</div>
+          <div>
+            <div class="igh-name">uncledullaz</div>
+            <div class="igh-sub">day 47 &mdash; amazon clone routing</div>
+          </div>
+        </div>
+        <div class="vp">
+          <div class="track" id="track">
+<div class="slide" id="slide-0">
+              <div class="hero-glow"></div>
+              <div class="scanlines"></div>
+              <div class="cr tl"></div><div class="cr tr"></div>
+              <div class="cr bl"></div><div class="cr br"></div>
+              <canvas class="react-hero" id="react-hero-img" width="360" height="360"></canvas>
+              <div class="sp-cover">
+                <div class="dp-row">
+                  <div class="dp-circle"><img src="../insta-dp.jpg" alt="Profile" /></div>
+                  <div class="prompt">
+                    <span class="path">~/100-days-of-code</span><span class="dollar">$</span><span class="cmd">node day-47.js</span>
+                  </div>
+                </div>
+                <div class="cover-taglines">
+                  <div class="tagline">[ DAY 47 ]</div>
+                  <div class="tagline">[ #100daysofcode ]</div>
+                </div>
+                <div class="content">
+                  <h1 class="bh xl">amazon clone<br /><span class="rc">routing.</span></h1>
+                  <p class="cmt" style="margin-top:6px;"><span class="slash">//</span> multipage SPA &middot; links &middot; route params</p>
+                  <div style="margin-top:18px;">
+                    <img src="../amazon-logo-large-white.png" alt="Amazon Clone" style="width:100%;max-width:260px;height:auto;display:block;" />
+                  </div>
+                </div>
+                <div class="ibar">
+                  <span><span class="k">stack:</span> react &middot; vite &middot; react-router-dom</span>
+                  <span class="sep">|</span>
+                  <span style="color: var(--muted2)">@uncledullaz</span>
+                </div>
+              </div>
+              <div class="pb">
+                <div class="pt"><div class="pf rc" style="width:12.5%"></div></div>
+                <span class="pl rc">01&nbsp;/&nbsp;08</span>
+              </div>
+            </div>
+<div class="slide" id="slide-1">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">ui preview</span></div>
+    <div class="stag rc">VISUAL UPDATE</div>
+    <div class="bh sm">amazon clone<br><span class="rc">screens</span></div>
+    <div class="cmt"><span class="slash">//</span> one app, three route states</div>
+    <div class="visual-stack">
+      <div class="visual-card"><span class="visual-label">HOME</span><img src="./pic-1.png" alt="Home screen" /></div>
+      <div class="visual-card"><span class="visual-label">PRODUCTS</span><img src="./pic-2.png" alt="Products screen" /></div>
+      <div class="visual-card"><span class="visual-label">PRODUCT DETAILS</span><img src="./pic-3.png" alt="Product details screen" /></div>
+    </div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:25%"></div></div><span class="pl rc">02&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr tl"></div><div class="cr tr"></div><div class="cr bl"></div><div class="cr br"></div>
+</div>
+<div class="slide lt rlt" id="slide-2">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">routing concepts</span></div>
+    <div class="stag rc">WHAT I LEARNT</div>
+    <div class="bh">react router<br><span class="rc">core ideas</span></div>
+    <div class="step"><div class="n">1</div><div><span class="ttl">multipage SPA pattern</span><span class="sub">different screens without full page reloads</span></div></div>
+    <div class="step"><div class="n">2</div><div><span class="ttl">Routes + Route</span><span class="sub">map URL paths to React components</span></div></div>
+    <div class="step"><div class="n">3</div><div><span class="ttl">Link and NavLink</span><span class="sub">use links instead of anchor tags for internal routing</span></div></div>
+    <div class="step"><div class="n">4</div><div><span class="ttl">useParams</span><span class="sub">read <span class="ic rc">id</span> from URL to render dynamic content</span></div></div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:37.5%"></div></div><span class="pl rc">03&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr rc tl"></div><div class="cr rc tr"></div><div class="cr rc bl"></div><div class="cr rc br"></div>
+</div>
+<div class="slide" id="slide-3">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">what i'm building</span></div>
+    <div class="stag rc">PROJECT</div>
+    <div class="bh">what i'm <span class="rc">building</span></div>
+    <div class="cmt"><span class="slash">//</span> turning routing concepts into a mini storefront flow</div>
+    <div class="step"><div class="n">1</div><div><span class="ttl">home page route</span><span class="sub"><span class="ic rc">/home</span> as the landing screen</span></div></div>
+    <div class="step"><div class="n">2</div><div><span class="ttl">products listing route</span><span class="sub"><span class="ic rc">/products</span> with links to each item</span></div></div>
+    <div class="step"><div class="n">3</div><div><span class="ttl">dynamic details route</span><span class="sub"><span class="ic rc">/products/:id</span> for each product page</span></div></div>
+    <div class="ibar"><span><span class="k">goal:</span> real navigation flow</span><span class="sep">|</span><span>same SPA, multiple views</span></div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:50%"></div></div><span class="pl rc">04&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr rc tl"></div><div class="cr rc tr"></div><div class="cr rc bl"></div><div class="cr rc br"></div>
+</div>
+<div class="slide" id="slide-4">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">App.jsx</span></div>
+    <div class="stag rc">CODE SNIPPET</div>
+    <div class="bh">defining <span class="rc">routes</span></div>
+    <div class="cmt"><span class="slash">//</span> each URL gets its own component</div>
+    <div class="code-block sm"><span class="file-label">App.jsx</span><span class="cb-kw">import</span> <span class="cb-punc">{</span> <span class="cb-var">Routes</span><span class="cb-punc">,</span> <span class="cb-var">Route</span> <span class="cb-punc">}</span> <span class="cb-kw">from</span> <span class="cb-str">&quot;react-router-dom&quot;</span><span class="cb-punc">;</span>
+
+<span class="cb-tag">&lt;Routes&gt;</span>
+  <span class="cb-tag">&lt;Route</span> <span class="cb-attr">path</span>=<span class="cb-str">&quot;/home&quot;</span> <span class="cb-attr">element</span>=<span class="cb-punc">{</span><span class="cb-tag">&lt;Home /&gt;</span><span class="cb-punc">}</span> <span class="cb-tag">/&gt;</span>
+  <span class="cb-tag">&lt;Route</span> <span class="cb-attr">path</span>=<span class="cb-str">&quot;/products&quot;</span> <span class="cb-attr">element</span>=<span class="cb-punc">{</span><span class="cb-tag">&lt;Products /&gt;</span><span class="cb-punc">}</span> <span class="cb-tag">/&gt;</span>
+  <span class="cb-tag">&lt;Route</span> <span class="cb-attr">path</span>=<span class="cb-str">&quot;/products/:id&quot;</span> <span class="cb-attr">element</span>=<span class="cb-punc">{</span><span class="cb-tag">&lt;ProductDetails /&gt;</span><span class="cb-punc">}</span> <span class="cb-tag">/&gt;</span>
+<span class="cb-tag">&lt;/Routes&gt;</span></div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:62.5%"></div></div><span class="pl rc">05&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr rc tl"></div><div class="cr rc tr"></div><div class="cr rc bl"></div><div class="cr rc br"></div>
+</div>
+<div class="slide lt rlt" id="slide-5">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">Products.jsx</span></div>
+    <div class="stag rc">CODE SNIPPET</div>
+    <div class="bh">links &amp; <span class="rc">navlinks</span></div>
+    <div class="cmt"><span class="slash">//</span> Link routes users without reloading the page</div>
+    <div class="code-block sm"><span class="file-label">Products.jsx</span><span class="cb-kw">import</span> <span class="cb-punc">{</span> <span class="cb-var">Link</span><span class="cb-punc">,</span> <span class="cb-var">NavLink</span> <span class="cb-punc">}</span> <span class="cb-kw">from</span> <span class="cb-str">&quot;react-router-dom&quot;</span><span class="cb-punc">;</span>
+
+<span class="cb-tag">&lt;NavLink</span> <span class="cb-attr">to</span>=<span class="cb-str">&quot;/products&quot;</span><span class="cb-tag">&gt;</span>Products<span class="cb-tag">&lt;/NavLink&gt;</span>
+
+<span class="cb-tag">&lt;Link</span> <span class="cb-attr">to</span>=<span class="cb-str">&quot;/products/01&quot;</span><span class="cb-tag">&gt;</span>Product 1<span class="cb-tag">&lt;/Link&gt;</span>
+<span class="cb-tag">&lt;Link</span> <span class="cb-attr">to</span>=<span class="cb-str">&quot;/products/02&quot;</span><span class="cb-tag">&gt;</span>Product 2<span class="cb-tag">&lt;/Link&gt;</span>
+
+<span class="cb-cm">// NavLink is best when active styles matter</span></div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:75%"></div></div><span class="pl rc">06&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr tl"></div><div class="cr tr"></div><div class="cr bl"></div><div class="cr br"></div>
+</div>
+<div class="slide" id="slide-6">
+  <div class="logo-row logo-row--dual">
+    <div class="logo-icon"><img src="../react-logo.svg.png" alt="React"></div>
+    <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon"></div>
+  </div>
+  <div class="sp">
+    <div class="prompt rp"><span class="path">~/day-47</span><span class="dollar"> $ </span><span class="cmd">ProductDetails.jsx</span></div>
+    <div class="stag rc">CODE SNIPPET</div>
+    <div class="bh">dynamic routes<br><span class="rc">with useParams</span></div>
+    <div class="cmt"><span class="slash">//</span> extract URL params to render context-specific data</div>
+    <div class="code-block sm"><span class="file-label">ProductDetails.jsx</span><span class="cb-kw">import</span> <span class="cb-punc">{</span> <span class="cb-var">useParams</span> <span class="cb-punc">}</span> <span class="cb-kw">from</span> <span class="cb-str">&quot;react-router-dom&quot;</span><span class="cb-punc">;</span>
+
+<span class="cb-kw">const</span> <span class="cb-var">ProductDetails</span> = <span class="cb-punc">() =&gt; {</span>
+  <span class="cb-kw">const</span> <span class="cb-var">params</span> = <span class="cb-fn">useParams</span><span class="cb-punc">();</span>
+  <span class="cb-kw">const</span> <span class="cb-var">productId</span> = <span class="cb-var">params</span>.<span class="cb-var">id</span><span class="cb-punc">;</span>
+
+  <span class="cb-kw">return</span> <span class="cb-tag">&lt;p&gt;</span>Viewing product: <span class="cb-punc">{</span><span class="cb-var">productId</span><span class="cb-punc">}</span><span class="cb-tag">&lt;/p&gt;</span><span class="cb-punc">;</span>
+<span class="cb-punc">};</span></div>
+    <div class="ibar"><span><span class="k">pattern:</span> <span class="ic rc">/products/:id</span></span><span class="sep">|</span><span>params.id drives UI</span></div>
+    <div class="pb"><div class="pt"><div class="pf rc" style="width:87.5%"></div></div><span class="pl rc">07&nbsp;/&nbsp;08</span></div>
+  </div>
+  <div class="cr rc tl"></div><div class="cr rc tr"></div><div class="cr rc bl"></div><div class="cr rc br"></div>
+</div>
+<div class="slide cta-bg" id="slide-7">
+
+              <div class="logo-row logo-row--dual">
+                <div class="logo-icon"><img src="../react-logo.svg.png" alt="" /></div>
+                <div class="logo-icon"><img src="../amazon-logo.png" alt="Amazon" /></div>
+              </div>
+              <img id="cta-bg-img" style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;z-index:0;pointer-events:none;" src="" alt="" />
+              <div class="cr tl"></div><div class="cr tr"></div>
+              <div class="cr bl"></div><div class="cr br"></div>
+              <div class="sp" style="justify-content:center;">
+                <div class="prompt" style="margin-bottom:42px;">
+                  <span class="path">~/100days</span><span class="dollar">$</span><span class="cmd">commit -m &quot;day 47&quot;</span>
+                </div>
+                <div class="stag">[ STATUS ] AMAZON CLONE IN PROGRESS</div>
+                <div class="cta-head-row">
+                  <div class="dp-circle cta-dp"><img src="../insta-dp.jpg" alt="Profile" /></div>
+                  <h2 class="bh xl">that&#8217;s a wrap<br /><span class="g">on day 47.</span></h2>
+                </div>
+                <p class="cmt" style="margin-top:18px;font-size:13px;">
+                  <span class="slash">//</span> multipage spa, links, navlinks, dynamic params. routing unlocked.<span class="cursor-blink"></span>
+                </p>
+                <div style="margin-top:42px;padding:16px;border:1px solid var(--border-g);border-radius:6px;background:rgba(0,255,65,0.04);">
+                  <div style="font-size:10px;color:var(--green);letter-spacing:1.5px;font-weight:700;margin-bottom:8px;">[ FOLLOW FOR MORE ]</div>
+                  <div style="font-size:15px;color:#fff;font-weight:700;">@uncledullaz</div>
+                  <div style="font-size:10.5px;color:var(--muted2);margin-top:4px;">javascript &middot; react &middot; building-in-public</div>
+                </div>
+                <div class="ibar" style="margin-top:auto;">
+                  <span>[REPO] github.com/AbdullahAliCodes</span><span class="sep">&middot;</span><span>#100DaysOfCode</span>
+                </div>
+              </div>
+              <div class="pb">
+                <div class="pt"><div class="pf" style="width:100%"></div></div>
+                <span class="pl">08&nbsp;/&nbsp;08</span>
+              </div>
+            </div>
+          <button class="nb nbp" id="btn-prev">&#8249;</button>
+          <button class="nb nbn" id="btn-next">&#8250;</button>
+        </div>
+        <div class="ig-actions">
+          <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <svg class="ig-icon ig-bk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="ig-dots"><div class="igdot on"></div><div class="igdot"></div><div class="igdot"></div><div class="igdot"></div><div class="igdot"></div><div class="igdot"></div><div class="igdot"></div><div class="igdot"></div></div>
+        <div class="igcap"><strong>uncledullaz</strong> day 47 &mdash; amazon clone routing in React &#128187;</div>
+      </div>
+    </div>
+    <script>
+
+  const SLIDE_COUNT = 8;
+  const track = document.getElementById('track');
+  let current = 0;
+
+  function drawReactAtom(canvas) {
+    const dpr = 4;
+    const size = 360;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const cx = size / 2, cy = size / 2;
+    const rx = size * 0.42, ry = size * 0.13;
+    ctx.strokeStyle = '#60dcfc';
+    ctx.lineWidth = size * 0.018;
+    ctx.shadowColor = '#60dcfc';
+    ctx.shadowBlur = size * 0.06;
+    for (let a = 0; a < 3; a++) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a * Math.PI / 3);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.shadowBlur = size * 0.1;
+    ctx.fillStyle = '#60dcfc';
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  window.addEventListener('load', () => {
+    const hero = document.getElementById('react-hero-img');
+    if (hero) drawReactAtom(hero);
+    const ctaBg = document.getElementById('cta-bg-img');
+    if (ctaBg) {
+      const gc = document.createElement('canvas');
+      gc.width = 480;
+      gc.height = 640;
+      const g = gc.getContext('2d');
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, 480, 640);
+      const grad = g.createRadialGradient(240, 640, 0, 240, 640, 520);
+      grad.addColorStop(0, 'rgba(0,255,65,0.22)');
+      grad.addColorStop(0.3, 'rgba(0,255,65,0.06)');
+      grad.addColorStop(0.65, 'rgba(0,0,0,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 480, 640);
+      ctaBg.src = gc.toDataURL('image/png');
+    }
+  });
+
+  function updateSlide(n) {
+    current = Math.max(0, Math.min(SLIDE_COUNT - 1, n));
+    track.style.transform = 'translateX(-' + (current * 100) + '%)';
+    document.querySelectorAll('.igdot').forEach((d, i) => d.classList.toggle('on', i === current));
+  }
+
+  let startX = 0, dragging = false, dragOffset = 0;
+  const vp = track.parentElement;
+
+  vp.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startX = e.clientX;
+    dragOffset = 0;
+    track.style.transition = 'none';
+  });
+  vp.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dragOffset = e.clientX - startX;
+    track.style.transform = 'translateX(calc(-' + (current * 100) + '% + ' + dragOffset + 'px))';
+  });
+  vp.addEventListener('pointerup', (e) => {
+    if (!dragging) return;
+    dragging = false;
+    track.style.transition = '';
+    const dx = e.clientX - startX;
+    if (dx < -40 && current < SLIDE_COUNT - 1) updateSlide(current + 1);
+    else if (dx > 40 && current > 0) updateSlide(current - 1);
+    else updateSlide(current);
+    dragOffset = 0;
+  });
+  vp.addEventListener('pointerleave', () => {
+    if (!dragging) return;
+    dragging = false;
+    track.style.transition = '';
+    updateSlide(current);
+    dragOffset = 0;
+  });
+
+  document.getElementById('btn-prev').addEventListener('click', () => { if (current > 0) updateSlide(current - 1); });
+  document.getElementById('btn-next').addEventListener('click', () => { if (current < SLIDE_COUNT - 1) updateSlide(current + 1); });
+
+  document.querySelectorAll('.igdot').forEach((dot, i) => {
+    dot.addEventListener('click', () => updateSlide(i));
+  });
+
+  function slideExportBackground(slideEl) {
+    if (slideEl.classList.contains('cta-bg')) {
+      return 'radial-gradient(ellipse at 50% 100%,rgba(0,255,65,0.22) 0%,rgba(0,255,65,0.06) 30%,#000 65%)';
+    }
+    if (slideEl.classList.contains('lt')) return '#F5F5EF';
+    return '#000000';
+  }
+
+  function onCloneStripReactFilter(documentClone, referenceElement) {
+    const root = referenceElement || documentClone.body || documentClone.documentElement;
+    if (root && root.querySelector) {
+      const h = root.querySelector('.react-hero');
+      if (h) h.style.filter = 'none';
+    }
+  }
+
+  function absolutizeSrc(src) {
+    try {
+      return new URL(src, window.location.href).href;
+    } catch (err) {
+      return src;
+    }
+  }
+
+  async function inlineImagesForExport(clone) {
+    const imgs = clone.querySelectorAll('img[src]');
+    for (let j = 0; j < imgs.length; j++) {
+      const img = imgs[j];
+      const src = img.getAttribute('src') || '';
+      if (!src || src.indexOf('data:') === 0) continue;
+      try {
+        const res = await fetch(absolutizeSrc(src), { cache: 'force-cache' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const blob = await res.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = () => reject(new Error('FileReader'));
+          fr.readAsDataURL(blob);
+        });
+        img.src = dataUrl;
+        if (!img.complete || img.naturalWidth === 0) {
+          await new Promise((resolve) => {
+            img.onload = img.onerror = () => resolve();
+            setTimeout(resolve, 4000);
+          });
+        }
+      } catch (e) {
+        console.warn('[export] inline image failed (use http://localhost):', src, e);
+      }
+    }
+  }
+
+  async function captureSlide(slideEl) {
+    const bg = slideExportBackground(slideEl);
+    const clone = slideEl.cloneNode(true);
+    const noAnim = document.createElement('style');
+    noAnim.textContent = '* { animation: none !important; transition: none !important; }';
+    clone.appendChild(noAnim);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:480px;height:640px;overflow:hidden;background:' + bg + ';';
+    clone.style.cssText += ';width:480px;height:640px;min-width:480px;flex:none;';
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+    try {
+      await inlineImagesForExport(clone);
+      const srcCanvases = slideEl.querySelectorAll('canvas');
+      const dstCanvases = clone.querySelectorAll('canvas');
+      srcCanvases.forEach((src, i) => {
+        if (!dstCanvases[i]) return;
+        dstCanvases[i].width = src.width;
+        dstCanvases[i].height = src.height;
+        dstCanvases[i].style.width = src.style.width;
+        dstCanvases[i].style.height = src.style.height;
+        dstCanvases[i].getContext('2d').drawImage(src, 0, 0);
+      });
+      return await html2canvas(wrap, {
+        width: 480,
+        height: 640,
+        scale: 2.25,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: null,
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: onCloneStripReactFilter
+      });
+    } finally {
+      if (wrap.parentNode) document.body.removeChild(wrap);
+    }
+  }
+
+  function downloadCanvas(canvas, filename) {
+    const a = document.createElement('a');
+    a.download = filename;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }
+
+  async function downloadSingle(i) {
+    const slide = document.getElementById('slide-' + i);
+    const btn = document.getElementById('dl-' + i);
+    btn.disabled = true;
+    document.body.classList.add('exporting');
+    try {
+      const canvas = await captureSlide(slide);
+      downloadCanvas(canvas, 'day47_slide_' + String(i + 1).padStart(2, '0') + '.png');
+    } catch (e) {
+      console.error(e);
+      alert('Export failed (slide ' + (i + 1) + '): ' + (e && e.message ? e.message : e));
+    } finally {
+      document.body.classList.remove('exporting');
+      btn.disabled = false;
+    }
+  }
+
+  document.querySelectorAll('.dl-single').forEach((btn, i) => {
+    btn.addEventListener('click', () => downloadSingle(i));
+  });
+
+  document.getElementById('dl-all').addEventListener('click', async () => {
+    const btn = document.getElementById('dl-all');
+    btn.disabled = true;
+    btn.textContent = 'exporting...';
+    document.body.classList.add('exporting');
+    try {
+      for (let i = 0; i < SLIDE_COUNT; i++) {
+        btn.textContent = 'exporting ' + (i + 1) + ' / ' + SLIDE_COUNT + '...';
+        const slide = document.getElementById('slide-' + i);
+        const canvas = await captureSlide(slide);
+        downloadCanvas(canvas, 'day47_slide_' + String(i + 1).padStart(2, '0') + '.png');
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Export failed: ' + (e && e.message ? e.message : e));
+    } finally {
+      document.body.classList.remove('exporting');
+      btn.disabled = false;
+      btn.textContent = 'download all 8 slides';
+    }
+  });
+
+    </script>
+  </body>
+</html>
